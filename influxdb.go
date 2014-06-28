@@ -403,6 +403,31 @@ func (self *Client) queryCommon(query string, useNumber bool, precision ...TimeP
 	return series, nil
 }
 
+func (self *Client) QueryStream(query string, out io.Writer, precision ...TimePrecision) error {
+	escapedQuery := url.QueryEscape(query)
+	url := self.getUrl("/db/" + self.database + "/series")
+	if len(precision) > 0 {
+		url += "&time_precision=" + string(precision[0])
+	}
+	url += "&q=" + escapedQuery
+	url += "&chunked=true"
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return err
+	}
+	if !self.compression {
+		req.Header.Set("Accept-Encoding", "identity")
+	}
+	resp, err := self.httpClient.Do(req)
+	err = responseToError(resp, err, false)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	_, err = io.Copy(out, resp.Body)
+	return err
+}
+
 func (self *Client) Ping() error {
 	url := self.getUrl("/ping")
 	resp, err := self.httpClient.Get(url)
